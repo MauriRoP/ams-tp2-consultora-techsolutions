@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0">Panel de Administración de Solicitudes</h2>
+    <p class="text-muted">Control transaccional del ciclo de vida de requerimientos y actualización de contratos.</p>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('admin_panel') }}" class="btn btn-outline-dark {% if not filtro %}active{% endif %}">Activas ({{ pendientes + revision }})</a>
+    <a href="{{ url_for('admin_panel', estado='pendiente') }}" class="btn btn-outline-warning {% if filtro == 'pendiente' %}active{% endif %}">Pendientes ({{ pendientes }})</a>
+    <a href="{{ url_for('admin_panel', estado='en_revision') }}" class="btn btn-outline-info {% if filtro == 'en_revision' %}active{% endif %}">En Revisión ({{ revision }})</a>
+    <a href="{{ url_for('admin_panel', estado='realizado') }}" class="btn btn-outline-success {% if filtro == 'realizado' %}active{% endif %}">Realizadas ({{ realizadas }})</a>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>ID</th>
+          <th>Fecha</th>
+          <th>Cliente / Empresa</th>
+          <th>Contrato #</th>
+          <th>Plan Actual</th>
+          <th>Plan Solicitado</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if solicitudes|length == 0 %}
+          <tr>
+            <td colspan="8" class="text-center py-4 text-muted">No existen solicitudes registradas para el filtro seleccionado.</td>
+          </tr>
+        {% endif %}
+        {% for s in solicitudes %}
+        <tr>
+          <td class="fw-bold">#{{ s.id }}</td>
+          <td><small>{{ s.fecha_creacion.strftime('%d/%m/%Y %H:%M') }}</small></td>
+          <td>
+            <strong>{{ s.cliente.empresa }}</strong><br>
+            <small class="text-muted">{{ s.cliente.nombre }}</small>
+          </td>
+          <td>#{{ s.contrato_id }}</td>
+          <td><span class="badge bg-light text-dark border">{{ s.contrato.plan.nombre }}</span></td>
+          <td><span class="badge bg-primary">{{ s.plan_solicitado.nombre }}</span></td>
+          <td>
+            {% if s.estado == 'pendiente' %}
+              <span class="badge bg-warning text-dark">Pendiente</span>
+            {% elif s.estado == 'en_revision' %}
+              <span class="badge bg-info text-dark">En Revisión</span>
+            {% elif s.estado == 'realizado' %}
+              <span class="badge bg-success">Realizado</span>
+            {% elif s.estado == 'rechazado' %}
+              <span class="badge bg-danger">Rechazado</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.estado in ['pendiente', 'en_revision'] %}
+            <form action="{{ url_for('resolver_solicitud') }}" method="POST" class="d-inline">
+              <input type="hidden" name="solicitud_id" value="{{ s.id }}">
+              
+              {% if s.estado == 'pendiente' %}
+                <button type="submit" name="accion" value="revisar" class="btn btn-sm btn-outline-info" title="Pasar a En Revisión">Revisar</button>
+              {% endif %}
+
+              <button type="submit" name="accion" value="aprobar" class="btn btn-sm btn-success fw-bold" onclick="return confirm('¿Aprobar solicitud y migrar contrato?')">Aprobar</button>
+              <button type="submit" name="accion" value="rechazar" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Rechazar solicitud?')">Rechazar</button>
+            </form>
+            {% else %}
+              <small class="text-muted">Cerrada el {{ s.fecha_resolucion.strftime('%d/%m/%Y') if s.fecha_resolucion else 'N/D' }}</small>
+            {% endif %}
+          </td>
+        </tr>
+        {% if s.motivo %}
+        <tr class="table-light">
+          <td colspan="8">
+            <small><strong>Motivo declarado:</strong> {{ s.motivo }}</small>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
