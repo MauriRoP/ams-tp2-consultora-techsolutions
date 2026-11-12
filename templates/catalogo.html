@@ -8,6 +8,34 @@
   </div>
 </div>
 
+<!-- Historial de Solicitudes  -->
+<div class="mb-5">
+    <h4>Mis Solicitudes de Cambio</h4>
+    <table class="table table-bordered">
+        <thead><tr><th>Plan Solicitado</th><th>Estado</th><th>Feedback de Consultora</th></tr></thead>
+        <tbody>
+            {% for s in mis_solicitudes %}
+            <tr>
+                <td>{{ s.plan_solicitado.nombre }}</td>
+                <td>
+                    <span class="badge 
+                        {% if s.estado == 'realizado' %}bg-success
+                        {% elif s.estado == 'rechazado' %}bg-danger
+                        {% else %}bg-warning text-dark{% endif %}">
+                        {{ s.estado|capitalize }}
+                    </span>
+                </td>
+                <td>{{ s.motivo_rechazo or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="3" class="text-center text-muted">Aún no tienes solicitudes registradas.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 <div class="row row-cols-1 row-cols-md-3 g-4 mb-5">
   {% for plan in planes %}
   <div class="col">
@@ -25,32 +53,27 @@
   {% endfor %}
 </div>
 
+<!-- Formulario simplificado -->
 <div class="card shadow-sm border-0">
   <div class="card-header bg-primary text-white py-3">
-    <h5 class="mb-0 fw-semibold">Solicitar Modificación de Plan (Cliente)</h5>
+    <h5 class="mb-0 fw-semibold">Solicitar Modificación de Plan</h5>
   </div>
   <div class="card-body p-4">
     <form action="{{ url_for('nueva_solicitud') }}" method="POST">
+      <!-- Enviamos el ID del cliente logueado de forma oculta -->
+      <input type="hidden" name="cliente_id" value="{{ session['user_id'] }}">
+      
       <div class="row g-3">
-        <div class="col-md-4">
-          <label class="form-label fw-semibold">Empresa / Cliente:</label>
-          <select name="cliente_id" class="form-select" required>
-            <option value="" disabled selected>Seleccione cliente...</option>
-            {% for c in clientes %}
-              <option value="{{ c.id }}">{{ c.empresa }} ({{ c.nombre }})</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4">
+        <div class="col-md-6">
           <label class="form-label fw-semibold">Contrato Activo:</label>
           <select name="contrato_id" class="form-select" required>
-            <option value="" disabled selected>Seleccione contrato...</option>
+            <option value="" disabled selected>Seleccione su contrato...</option>
             {% for cnt in contratos %}
               <option value="{{ cnt.id }}">Contrato #{{ cnt.id }} - Plan Actual: {{ cnt.plan.nombre }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-6">
           <label class="form-label fw-semibold">Nuevo Plan Deseado:</label>
           <select name="plan_id" class="form-select" required>
             <option value="" disabled selected>Seleccione plan a migrar...</option>

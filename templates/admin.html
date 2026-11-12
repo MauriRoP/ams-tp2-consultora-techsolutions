@@ -61,6 +61,8 @@
             {% if s.estado in ['pendiente', 'en_revision'] %}
             <form action="{{ url_for('resolver_solicitud') }}" method="POST" class="d-inline">
               <input type="hidden" name="solicitud_id" value="{{ s.id }}">
+
+              <input type="text" name="motivo_rechazo" class="form-control form-control-sm mb-2" placeholder="Escriba el motivo del rechazo...">
               
               {% if s.estado == 'pendiente' %}
                 <button type="submit" name="accion" value="revisar" class="btn btn-sm btn-outline-info" title="Pasar a En Revisión">Revisar</button>

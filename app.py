@@ -1,18 +1,18 @@
 import os
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'techsolutions-secret-dev-key-2026'
+app.config['SECRET_KEY'] = 'clave_secreta_da_vinci_2026'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///consultora.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-
-# MODELOS DE DATOS (Flask-SQLAlchemy)
-
+# ==========================================
+# MODELOS DE DATOS
+# ==========================================
 
 class Cliente(db.Model):
     __tablename__ = 'clientes'
@@ -51,26 +51,59 @@ class Solicitud(db.Model):
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
     contrato_id = db.Column(db.Integer, db.ForeignKey('contratos.id'), nullable=False)
     plan_solicitado_id = db.Column(db.Integer, db.ForeignKey('planes.id'), nullable=False)
-    
-    # Estados: 'pendiente', 'en_revision', 'realizado', 'rechazado'
-    estado = db.Column(db.String(20), nullable=False, default='pendiente')
+    estado = db.Column(db.String(20), default='pendiente')
     motivo = db.Column(db.Text, nullable=True)
-    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow) # Faltaba este campo vital
     fecha_resolucion = db.Column(db.DateTime, nullable=True)
-
+    motivo_rechazo = db.Column(db.String(200), nullable=True)
+    
+# ==========================================
 # RUTAS Y CONTROLADORES
+# ==========================================
 
-@app.route('/', methods=['GET'])
-def index():
-    """Catálogo público de servicios/planes y formulario para solicitar cambio."""
-    planes = Plan.query.all()
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        perfil = request.form.get('perfil')
+        if perfil == 'admin':
+            session['user_id'] = 0
+            session['role'] = 'admin'
+            return redirect(url_for('admin_panel'))
+        else:
+            session['user_id'] = int(perfil)
+            session['role'] = 'cliente'
+            return redirect(url_for('catalogo'))
+            
     clientes = Cliente.query.all()
-    contratos = Contrato.query.filter_by(activo=True).all()
-    return render_template('catalogo.html', planes=planes, clientes=clientes, contratos=contratos)
+    return render_template('login.html', clientes=clientes)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/')
+@app.route('/catalogo', methods=['GET'])
+def catalogo():
+    """Catálogo y solicitudes del cliente logueado."""
+    if 'user_id' not in session or session.get('role') != 'cliente':
+        return redirect(url_for('login'))
+        
+    cliente_id = session['user_id']
+    planes = Plan.query.all()
+    contratos = Contrato.query.filter_by(cliente_id=cliente_id, activo=True).all()
+    mis_solicitudes = Solicitud.query.filter_by(cliente_id=cliente_id).order_by(Solicitud.id.desc()).all()
+    
+    return render_template(
+        'catalogo.html',
+        planes=planes,
+        contratos=contratos,
+        mis_solicitudes=mis_solicitudes
+    )
 
 @app.route('/solicitudes/nueva', methods=['POST'])
 def nueva_solicitud():
-    """El cliente crea una solicitud de modificación en estado 'pendiente'."""
+    """El cliente crea una solicitud de modificación."""
     cliente_id = request.form.get('cliente_id', type=int)
     contrato_id = request.form.get('contrato_id', type=int)
     plan_solicitado_id = request.form.get('plan_id', type=int)
@@ -78,16 +111,16 @@ def nueva_solicitud():
 
     if not all([cliente_id, contrato_id, plan_solicitado_id]):
         flash('Todos los campos son obligatorios.', 'danger')
-        return redirect(url_for('index'))
+        return redirect(url_for('catalogo'))
 
     contrato = Contrato.query.get(contrato_id)
     if not contrato or contrato.cliente_id != cliente_id:
         flash('El contrato indicado no pertenece al cliente.', 'danger')
-        return redirect(url_for('index'))
+        return redirect(url_for('catalogo'))
 
     if contrato.plan_id == plan_solicitado_id:
         flash('El plan solicitado debe ser distinto al plan actual del contrato.', 'warning')
-        return redirect(url_for('index'))
+        return redirect(url_for('catalogo'))
 
     solicitud = Solicitud(
         cliente_id=cliente_id,
@@ -100,18 +133,20 @@ def nueva_solicitud():
     db.session.add(solicitud)
     db.session.commit()
     flash(f'Solicitud #{solicitud.id} registrada con éxito en estado PENDIENTE.', 'success')
-    return redirect(url_for('index'))
+    return redirect(url_for('catalogo'))
 
 @app.route('/admin/panel', methods=['GET'])
 def admin_panel():
-    """Panel de administración: visualización de solicitudes pendientes y en revisión."""
+    """Panel de administración."""
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
     filtro_estado = request.args.get('estado')
     query = Solicitud.query
 
     if filtro_estado in ['pendiente', 'en_revision', 'realizado', 'rechazado']:
         solicitudes = query.filter_by(estado=filtro_estado).order_by(Solicitud.fecha_creacion.desc()).all()
     else:
-        # Por defecto muestra pendientes y en revisión prioritarias
         solicitudes = query.filter(Solicitud.estado.in_(['pendiente', 'en_revision'])).order_by(Solicitud.fecha_creacion.asc()).all()
 
     total_pendientes = Solicitud.query.filter_by(estado='pendiente').count()
@@ -129,15 +164,9 @@ def admin_panel():
 
 @app.route('/solicitudes/resolver', methods=['POST'])
 def resolver_solicitud():
-    """
-    Controlador de resolución de solicitud según diagrama de secuencia:
-    1. Valida existencia de la solicitud y estado apto.
-    2. Transiciona estado a 'realizado' (o 'rechazado' según acción admin).
-    3. Si es 'aprobar', actualiza plan_id del Contrato asociado.
-    4. Ejecuta commit transaccional con manejo de rollback ante fallos.
-    """
     solicitud_id = request.form.get('solicitud_id', type=int)
-    accion = request.form.get('accion')  # 'aprobar', 'rechazar' o 'revisar'
+    accion = request.form.get('accion') 
+    motivo = request.form.get('motivo_rechazo') 
 
     solicitud = Solicitud.query.get(solicitud_id)
     if not solicitud:
@@ -154,7 +183,6 @@ def resolver_solicitud():
             if not contrato or not contrato.activo:
                 raise ValueError("El contrato asociado no está activo o no fue encontrado.")
 
-            # Modificación atómica
             contrato.plan_id = solicitud.plan_solicitado_id
             solicitud.estado = 'realizado'
             solicitud.fecha_resolucion = datetime.utcnow()
@@ -167,6 +195,7 @@ def resolver_solicitud():
         elif accion == 'rechazar':
             solicitud.estado = 'rechazado'
             solicitud.fecha_resolucion = datetime.utcnow()
+            solicitud.motivo_rechazo = motivo 
             flash(f'Solicitud #{solicitud.id} ha sido rechazada.', 'secondary')
 
         else:
@@ -181,15 +210,15 @@ def resolver_solicitud():
 
     return redirect(url_for('admin_panel'))
 
+# ==========================================
 # CLI / SEED DATA
+# ==========================================
 
 @app.cli.command('init-db')
 def init_db():
-    """Inicializa la base de datos SQLite y carga datos de prueba para la Demo."""
     db.drop_all()
     db.create_all()
 
-    # Planes de Tech Solutions
     plan_bronce = Plan(nombre="Soporte Básico", descripcion="Mesa de ayuda N1, resolución en 48hs hábiles y monitoreo pasivo.", precio_mensual=150.0, sla_horas=48)
     plan_plata = Plan(nombre="Infraestructura Pro", descripcion="Mantenimiento preventivo, soporte N2 12x5 y respaldos automáticos.", precio_mensual=350.0, sla_horas=24)
     plan_oro = Plan(nombre="Enterprise Cloud", descripcion="Auditoría continua, alta disponibilidad, soporte 24x7 y Blue Team defensivo.", precio_mensual=750.0, sla_horas=4)
@@ -197,21 +226,18 @@ def init_db():
     db.session.add_all([plan_bronce, plan_plata, plan_oro])
     db.session.commit()
 
-    # Clientes
     c1 = Cliente(nombre="Acme Logística S.A.", email="it@acmelogistica.com", empresa="Acme Group")
     c2 = Cliente(nombre="Fintech Río S.R.L.", email="infra@fintechrio.com.ar", empresa="Fintech Río")
 
     db.session.add_all([c1, c2])
     db.session.commit()
 
-    # Contratos iniciales
     contrato1 = Contrato(cliente_id=c1.id, plan_id=plan_bronce.id, activo=True)
     contrato2 = Contrato(cliente_id=c2.id, plan_id=plan_plata.id, activo=True)
 
     db.session.add_all([contrato1, contrato2])
     db.session.commit()
 
-    # Solicitud inicial de prueba en 'pendiente'
     solicitud_demo = Solicitud(
         cliente_id=c1.id,
         contrato_id=contrato1.id,
