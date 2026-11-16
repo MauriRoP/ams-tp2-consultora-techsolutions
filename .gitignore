@@ -14,3 +14,4 @@ __pycache__/
 # Configuraciones de editores
 .vscode/
 .idea/
+desktop.ini
