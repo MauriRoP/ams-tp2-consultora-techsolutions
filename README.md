@@ -23,7 +23,7 @@ El sistema permite a empresas clientes visualizar su plan contratado (Soporte BÃ
 
    git clone https://github.com/MauriRoP/ams-tp2-consultora-techsolutions.git
 
-   cd ams-tp2-consultora-techsolution
+   cd ams-tp2-consultora-techsolutions
 
 ## 1 Crear y activar el entorno virtual:
 * **python -m venv venv**
@@ -31,7 +31,7 @@ El sistema permite a empresas clientes visualizar su plan contratado (Soporte BÃ
 * **venv\Scripts\activate**
 
 ## 2 Instalar las dependencias requeridas:
-* **pip install Flask Flask-SQLAlchemy**
+* **pip install -r requirements.txt**
 
 ## 3 Inicializar la base de datos, crea las tablas y carga los datos semilla:
 * **flask --app app.py init-db**
