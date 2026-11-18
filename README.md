@@ -7,7 +7,6 @@ El sistema permite a empresas clientes visualizar su plan contratado (Soporte BÃ
 ## ðŸ‘¥ Equipo de Trabajo
 * **Mauricio Rocha** 
 * **Miguel Rocha** 
-* **Santi** 
 * **Wilson**
 * **Priscila** 
 
